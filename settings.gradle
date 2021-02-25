@@ -1,0 +1,3 @@
+include ':utitl'
+include ':app'
+rootProject.name = "qiuytool"

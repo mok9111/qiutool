@@ -1,0 +1,254 @@
+
+
+/**
+ * 右侧字母排序参考
+ */
+@RequiresApi(api = Build.VERSION_CODES.Q)
+public class ExpertsListActivity  extends BaseAvtivity
+{
+    @BindView(R.id.title)
+    TextView title;
+    @BindView(R.id.adressbooklist)
+    RecyclerView adressbooklist;
+    @BindView(R.id.textnumber)
+    TextView textnumber;
+    @BindView(R.id.ic_search)
+    ImageView ic_search;
+
+    MyBaseAdapter myBaseAdapter;
+    List<ExpertsInfo.ListBean> list = new ArrayList<>();
+    int nextpage = 1;
+    @BindView(R.id.sf_swiperefresh)
+    SmartRefreshLayout sfSwiperefresh;
+    @BindView(R.id.aboutedittextgjz)
+    EditText aboutedittextgjz;
+    @BindView(R.id.side_bar)
+    WaveSideBar sideBar;
+    @BindView(R.id.nodate)
+    RelativeLayout nodate;
+
+
+    String guanjianzi="";
+    int phah=0;//软键盘重复
+    Drawable img_off;
+    Resources res ;
+    List<BooksortSidebar> lists = new ArrayList<>();
+    @Override
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_addressbooklist);
+        ButterKnife.bind(this);
+        res = getResources();
+        inits();
+        https(nextpage,guanjianzi);
+    }
+
+    private void https(int nextpage,String guanjianzis) {
+        Map<String, Object> paramss = new HashMap<>();
+        Map<String, Object> params = new HashMap<>();
+
+        if(!guanjianzis.equals("")) {
+            list.clear();
+            paramss.put("keywords", guanjianzis);
+        }
+        params.put("pageNo", 0);
+        params.put("pageSize", 0);
+        params.put("queryExampl", paramss);
+        mCompositeSubscription.add(mWebApi.csdzExpert(user.getKey(),params)
+                .subscribeOn(Schedulers.io())
+                .unsubscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .doOnSubscribe(() -> showProgressDialog(R.string.loading))
+                .subscribe(this::response, this::onResponseError)
+        );
+    }
+
+    @SuppressLint("SetTextI18n")
+    private void response(WebResults<ExpertsInfo> addressBookInfoWebResult) {
+        phah=0;
+        if (mDialog != null)
+            mDialog.dismiss();;
+        if (addressBookInfoWebResult.isFlag()) {
+//            textnumber.setVisibility(View.VISIBLE);
+//            textnumber.setText(addressBookInfoWebResult.getData().getTotal() + "条数据");
+
+            if(addressBookInfoWebResult.getData().getTotal()==0)
+            {
+                sfSwiperefresh.setVisibility(View.GONE);
+                nodate.setVisibility(View.VISIBLE);
+            }else
+            {
+                sfSwiperefresh.setVisibility(View.VISIBLE);
+                nodate.setVisibility(View.GONE);
+            }
+            aboutedittextgjz.setHint("搜索(共"+addressBookInfoWebResult.getData().getTotal()+"人)");
+            list.addAll(addressBookInfoWebResult.getData().getList());
+            nextpage = addressBookInfoWebResult.getData().getNextPage();
+            for(ExpertsInfo.ListBean info:addressBookInfoWebResult.getData().getList())
+            {
+                lists.add(new BooksortSidebar(info.getName(),info.getPhone(),info.getCompanyName()));
+            }
+            Collections.sort(lists);
+            myBaseAdapter.updateall(list);
+        } else {
+            sfSwiperefresh.setVisibility(View.GONE);
+            nodate.setVisibility(View.VISIBLE);
+            Toast(addressBookInfoWebResult.getMessage());
+        }
+    }
+
+
+    private void inits() {
+        title.setText("专家库");
+        img_off = res.getDrawable(R.drawable.newhomepagezjk);
+        img_off.setBounds(0, 0, img_off.getMinimumWidth(), img_off.getMinimumHeight());
+        title.setCompoundDrawables(img_off, null, null, null); //设置左图标
+        StatusBarUtil.setDrawable(this, R.drawable.backgroundall);
+        aboutedittextgjz.setOnKeyListener(new View.OnKeyListener() {
+
+            @Override
+
+            public boolean onKey(View v, int keyCode, KeyEvent event) {
+
+                if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                    // 先隐藏键盘
+                    ((InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                            .hideSoftInputFromWindow(ExpertsListActivity.this.getCurrentFocus()
+                                    .getWindowToken(), InputMethodManager.HIDE_NOT_ALWAYS);
+                    //进行搜索操作的方法，在该方法中可以加入mEditSearchUser的非空判断
+                    list.clear();
+                    if (!aboutedittextgjz.getText().toString().equals(""))
+                    {
+                        guanjianzi=aboutedittextgjz.getText().toString();
+                        if(phah==0) {
+                            phah=1;
+                            https(1, guanjianzi);
+                        }
+                    }else
+                    {
+                        guanjianzi="";
+                        if(phah==0) {
+                            phah = 1;
+                            https(1, guanjianzi);
+                        }
+                    }
+                }
+                return false;
+            }
+        });
+        adressbooklist.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));//设置LinearLayoutManager.HORIZONTAL  则水平滚动
+        sfSwiperefresh.setRefreshHeader(new MaterialHeader(this).setShowBezierWave(true));
+        sfSwiperefresh.setPrimaryColorsId(R.color.colorAccent);//设置 Footer 为 球脉冲 样式
+        sfSwiperefresh.setRefreshFooter(new BallPulseFooter(this).setAnimatingColor(this.getResources().getColor(R.color.colorAccent)), ViewGroup.LayoutParams.MATCH_PARENT, DisplayUtil.dp2px(this, 40));//.setSpinnerStyle(SpinnerStyle.Scale));
+        sfSwiperefresh.setOnRefreshListener(new OnRefreshListener() {
+            @Override
+            public void onRefresh(RefreshLayout refreshlayout) {
+                refreshlayout.finishRefresh(500);//传入false表示刷新失败//xiala
+            }
+        });
+        sfSwiperefresh.setOnLoadMoreListener(new OnLoadMoreListener() {
+            @Override
+            public void onLoadMore(RefreshLayout refreshlayout) { //上刷
+                refreshlayout.finishLoadMore(500);//传入false表示加载失败
+                if (nextpage == 0) {
+                    Toast("数据已全部加载完成");
+                }else {
+                    https(nextpage,guanjianzi);
+                }
+            }
+        });
+        sideBar.setOnSelectIndexItemListener(new WaveSideBar.OnSelectIndexItemListener() {
+            @Override
+            public void onSelectIndexItem(String index) {
+                LogUtils.e(index);
+                for (int i = 0; i < lists.size(); i++) {
+                    if (lists.get(i).getFirstLetter().equals(index)) {
+                        ((LinearLayoutManager) adressbooklist.getLayoutManager()).scrollToPositionWithOffset(i, 0);
+                        return;
+                    }
+                }
+            }
+        });
+        myBaseAdapter = new MyBaseAdapter(this, list, R.layout.adapter_addresslist) {
+            @Override
+            public void convert(BaseViewHolder holder, Object item, int position, boolean isScrolling) {
+                ((TextView) holder.getView(R.id.depts)).setText(lists.get(position).getDepts());
+                TextView name= (TextView) holder.getView(R.id.name);
+                TextView phone= (TextView) holder.getView(R.id.phone);
+                TextView FirstLetter= (TextView) holder.getView(R.id.FirstLetter);
+                RelativeLayout relativeLayout = holder.getView(R.id.adapteronclie);
+                phone.setText(lists.get(position).getPhone());
+                name.setText(lists.get(position).getName());
+                //根据position获取首字母作为目录catalog
+                String catalog = lists.get(position).getFirstLetter();
+                //如果当前位置等于该分类首字母的Char的位置 ，则认为是第一次出现
+                if(position == getPositionForSection(catalog)){
+                    FirstLetter.setVisibility(View.VISIBLE);
+                    FirstLetter.setText(lists.get(position).getFirstLetter().toUpperCase());
+                }else{
+                    FirstLetter.setVisibility(View.GONE);
+                }
+                phone.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        callPhone(phone.getText().toString());
+                    }
+                });
+                relativeLayout.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        for(int i=0;i<lists.size();i++)
+                        {
+                            if(name.getText().toString().equals(list.get(i).getName()))
+                            {
+                                Intent intent = new Intent(ExpertsListActivity.this, ExpertsActivity.class);
+                                Bundle bundle = new Bundle();
+                                bundle.putParcelable("model", list.get(i));
+                                intent.putExtras(bundle);
+                                startActivity(intent);
+                                return;
+                            }
+                        }
+                    }
+                });
+            }
+        };
+        adressbooklist.setAdapter(myBaseAdapter);
+    }
+
+    @OnClick({R.id.back_iv,R.id.ic_search})
+    public void onViewClicked(View view) {
+        switch (view.getId())
+        {
+            case R.id.back_iv:
+                finish();
+                break;
+            case R.id.ic_search:
+                myBaseAdapter.updateall(list);
+                list.clear();
+                if (!aboutedittextgjz.getText().toString().equals(""))
+                {
+                    guanjianzi=aboutedittextgjz.getText().toString();
+                    https(1,guanjianzi);
+                }else
+                {
+                    guanjianzi="";
+                    https(1,guanjianzi);
+                }
+                break;
+        }
+
+    }
+    /**
+     * 获取catalog首次出现位置
+     */
+    public int getPositionForSection(String catalog) {
+        for (int i = 0; i < lists.size(); i++) {
+            String sortStr = lists.get(i).getFirstLetter();
+            if (catalog.equalsIgnoreCase(sortStr)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+}
